@@ -22,11 +22,14 @@ console.log('javascript loaded')
 // === MODEL - single Etsy item 
 var EtsyModel = Backbone.Model.extend({
 	
-	url: 'https://openapi.etsy.com/v2/listings/active.js?api_key=aavnvygu0h5r52qes74x9zvo&includes=MainImage&callback=',
+	// url: 'https://openapi.etsy.com/v2/listings/active.js?api_key=aavnvygu0h5r52qes74x9zvo&includes=Images',
+	url: 'https://openapi.etsy.com/v2/listings/',
+
+	apikey: 'aavnvygu0h5r52qes74x9zvo',
 
 	parse: function(responseData){
-		console.log('model request', responseData)
-		return responseData
+		console.log('model request', responseData.results[0])
+		return responseData.results[0]
 	}
 })
 
@@ -35,11 +38,11 @@ var EtsyModel = Backbone.Model.extend({
 var EtsyCollection = Backbone.Collection.extend({
 	
 	url:function(){
-		return 'https://openapi.etsy.com/v2/listings/active.js?api_key=aavnvygu0h5r52qes74x9zvo&includes=MainImage&callback='
-	}
+		return 'https://openapi.etsy.com/v2/listings/active.js?api_key=aavnvygu0h5r52qes74x9zvo&includes=MainImage'
+	},
 })
 
-// === VIEW - list on #home route
+// === VIEW - view collection on #home route
 var EtsyView = Backbone.View.extend({
 
 	el: '#container',
@@ -56,16 +59,16 @@ var EtsyView = Backbone.View.extend({
 	displayTitleHome: function(){
 		// console.log('view.dTH run')
 		var self = this
-		// var resultsTitlesArr = self.collection.models[0].attributes.results
 		var listings = self.collection.models[0].attributes.results
 		// console.log('rTA', resultsTitlesArr)
 		var titlesHtml = ''
-		// resultsTitlesArr.forEach(function(titleArr){
 		listings.forEach(function(listing){
+			var itemImg = listing.MainImage.url_570xN
 			var title = listing.title
-			titlesHtml += `<li data-idItem="${listing.listing_id}">${title}
+			titlesHtml += `	<img src="${itemImg}">
+							<div data-idItem="${listing.listing_id}">${title}
 							<button type="button">i</button>
-							</li>`
+							</div>`
 		})
 		// console.log(titlesHtml)
 		return titlesHtml
@@ -77,16 +80,14 @@ var EtsyView = Backbone.View.extend({
 		
 		this.$el.html(
 			`<input type="text">
-			<div id="titleslistdiv">
-				<ul id="titlelistul">${this.displayTitleHome()}</ul>
-			</div>`
+			<div id="activelistings">${this.displayTitleHome()}</div>`
 		)
 	},
 
 	initialize: function(){
 		console.log('stuff in the collection', this.collection)
 		this.listenTo(this.collection, "update", this.render)
-		console.log('stuff in the view', this)
+		console.log('stuff in the group view', this)
 		// this.render()
 	}
 })
@@ -96,8 +97,27 @@ var EtsySingleView = Backbone.View.extend({
 
 	el: "#container",
 
+	descriptionSingleItem: function(){return this.model.attributes.description},
+
+	imagesSingleItem: function(){return this.model.attributes.Images[0].url_570xN},
+
+	priceSingleItem: function(){return this.model.attributes.price},
+
+	titleSingleItem: function(){return this.model.attributes.title},
+	
+	urlSingleItem: function(){return this.model.attributes.url},
+
+	displaySingleItem: function(){this.$el.html(
+		`<div id=title>${this.titleSingleItem()}</div></br>
+		<img id=images src=${this.imagesSingleItem()}></br></br>
+		<div id=description>${this.descriptionSingleItem()}</div></br>
+		<div id=price>Price: $ ${this.priceSingleItem()}</div></br>
+		<div id=url>URL: <a href=${this.urlSingleItem()}>${this.urlSingleItem()}</a></div></br>`
+	)},
+
 	render: function(){
-		console.log('EtsySingleView.render run')
+		console.log('stuff in the model', this.model)
+		this.displaySingleItem()
 	}
 })
 
@@ -116,32 +136,35 @@ var EtsyRouter = Backbone.Router.extend({
 	detailsPage: function(idItem){
 		console.log('router.detailsPage')
 		var self = this
-		if(this.eCollection.state === 'empty'){
-			//state-dependent, relies on starting from #home and click
-			var eModel = new EtsyModel()
-			this.eSingleView.model = eModel
-			console.log(eModel)
-			// console.log(this.eSingleView.model)
-			var renderSingleView = this.eSingleView.render.bind(this.eSingleView)
-			//fetch
-
-		}
+		this.eModel.fetch({
+			url: `https://openapi.etsy.com/v2/listings/${idItem}.js`,
+			data: {
+				api_key: this.eModel.apikey,
+				includes: 'Images'
+				},
+			dataType: 'jsonp',
+			processData: true
+		}).done(function(){
+			// console.log(self.eModel)
+			self.eSingleView.render()
+		})
 	},
 
 	homePage: function(){
 		// console.log('router.homepage run')
 		this.eCollection.fetch({
-			// data: {includes: MainImage},
+			data: {includes: 'MainImage'},
 			dataType: 'jsonp'
 		})
 	},
 
 	initialize: function(){
+		this.eModel = new EtsyModel
 		this.eCollection = new EtsyCollection()
 		this.eView = new EtsyView({collection: this.eCollection})
 		console.log('stuff in the router', this)
 		this.eCollection.state = 'empty'
-		this.eSingleView = new EtsySingleView()
+		this.eSingleView = new EtsySingleView({model: this.eModel})
 		Backbone.history.start()
 	}
 })
